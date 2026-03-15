@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tone AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #12121a; --border: #ffffff14;
+    --accent: #7c6af7; --accent2: #f76a8a; --text: #f0eeff; --muted: #7070a0;
+    --angry:#f76a6a; --happy:#6af7a0; --sad:#6aaef7; --fear:#c76af7;
+    --surprise:#f7c46a; --neutral:#a0a0c0; --disgust:#a0f76a; --calm:#6af7e0; --fearful:#c76af7; --surprised:#f7c46a;
+  }
+  body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image: linear-gradient(rgba(124,106,247,0.04) 1px,transparent 1px), linear-gradient(90deg,rgba(124,106,247,0.04) 1px,transparent 1px);
+    background-size:40px 40px; pointer-events:none; z-index:0;
+  }
+  .app { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:2rem 1.5rem; }
+  header { display:flex; align-items:center; justify-content:space-between; margin-bottom:2.5rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon { width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent2)); display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .logo h1 { font-size:1.4rem; font-weight:800; letter-spacing:-0.5px; }
+  .logo span { color:var(--accent); }
+  .status-pill { font-family:'Space Mono',monospace; font-size:11px; padding:5px 12px; border:1px solid var(--border); border-radius:100px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#3f3f6a; transition:background 0.3s; }
+  .dot.active { background:#6af7a0; box-shadow:0 0 6px #6af7a060; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; }
+  @media(max-width:700px){.grid{grid-template-columns:1fr;}}
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+  .card-header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .card-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .card-badge { font-family:'Space Mono',monospace; font-size:10px; padding:3px 8px; border-radius:100px; background:rgba(124,106,247,0.15); color:var(--accent); border:1px solid rgba(124,106,247,0.3); }
+  .cam-wrap { position:relative; width:100%; aspect-ratio:4/3; background:#08080f; }
+  #videoEl { width:100%; height:100%; object-fit:cover; display:block; transform:scaleX(-1); }
+  #camOverlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:#08080f; font-size:13px; color:var(--muted); }
+  .cam-icon { font-size:40px; opacity:0.3; }
+  #faceBox { position:absolute; border:2px solid var(--accent); border-radius:4px; pointer-events:none; transition:all 0.1s ease; display:none; }
+  .face-label { position:absolute; top:-28px; left:0; background:var(--accent); color:white; font-family:'Space Mono',monospace; font-size:10px; padding:2px 8px; border-radius:4px; white-space:nowrap; }
+  .emotion-display { padding:1.25rem; }
+  .big-emotion { display:flex; align-items:center; gap:16px; margin-bottom:1.25rem; padding:1rem; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.02); }
+  .big-emoji { font-size:48px; line-height:1; }
+  .big-label { font-size:1.6rem; font-weight:800; letter-spacing:-1px; text-transform:capitalize; }
+  .big-conf { font-family:'Space Mono',monospace; font-size:12px; color:var(--muted); margin-top:2px; }
+  .bars { display:flex; flex-direction:column; gap:8px; }
+  .bar-row { display:flex; align-items:center; gap:10px; }
+  .bar-label { font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); width:68px; text-transform:capitalize; }
+  .bar-track { flex:1; height:6px; background:rgba(255,255,255,0.06); border-radius:100px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:100px; transition:width 0.4s ease; }
+  .bar-val { font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); width:38px; text-align:right; }
+  .audio-section { padding:1.25rem; }
+  .visualizer-wrap { height:80px; border-radius:10px; background:rgba(255,255,255,0.02); border:1px solid var(--border); overflow:hidden; margin-bottom:1rem; }
+  #waveCanvas { width:100%; height:100%; display:block; }
+  .controls { display:flex; gap:10px; }
+  .btn { flex:1; padding:11px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,0.04); color:var(--text); font-family:'Syne',sans-serif; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .btn:hover { background:rgba(255,255,255,0.08); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:white; }
+  .btn.recording { background:var(--accent2); border-color:var(--accent2); color:white; }
+  .combined-card { margin-bottom:1.5rem; }
+  .combined-inner { padding:1.5rem; display:flex; align-items:center; gap:2rem; flex-wrap:wrap; }
+  .combined-emoji { font-size:72px; line-height:1; }
+  .combined-text h2 { font-size:2rem; font-weight:800; letter-spacing:-1.5px; text-transform:capitalize; }
+  .combined-text p { color:var(--muted); font-size:13px; margin-top:4px; font-family:'Space Mono',monospace; }
+  .combined-chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .chip { font-size:12px; padding:4px 12px; border-radius:100px; border:1px solid var(--border); font-family:'Space Mono',monospace; color:var(--muted); }
+  .log-body { padding:1rem 1.25rem; max-height:150px; overflow-y:auto; }
+  .log-entry { font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); padding:3px 0; border-bottom:1px solid var(--border); }
+  .log-entry span { color:var(--accent); }
+  .placeholder-msg { font-family:'Space Mono',monospace; font-size:11px; color:var(--muted); text-align:center; padding:1.5rem; opacity:0.6; }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .pulse{animation:pulse 1s ease infinite;}
+  .f-neutral{background:var(--neutral);} .f-calm{background:var(--calm);} .f-happy{background:var(--happy);}
+  .f-sad{background:var(--sad);} .f-angry{background:var(--angry);} .f-fearful{background:var(--fearful);}
+  .f-disgust{background:var(--disgust);} .f-surprised{background:var(--surprised);}
+  .f-fear{background:var(--fear);} .f-surprise{background:var(--surprise);}
+  .c-neutral{color:var(--neutral);} .c-calm{color:var(--calm);} .c-happy{color:var(--happy);}
+  .c-sad{color:var(--sad);} .c-angry{color:var(--angry);} .c-fearful{color:var(--fearful);}
+  .c-disgust{color:var(--disgust);} .c-surprised{color:var(--surprised);}
+  .c-fear{color:var(--fear);} .c-surprise{color:var(--surprise);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🎵</div>
+      <h1>Tone<span>AI</span></h1>
+    </div>
+    <div class="status-pill">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">idle</span>
+    </div>
+  </header>
+
+  <div class="card combined-card" id="combinedCard" style="display:none;">
+    <div class="card-header">
+      <span class="card-title">Fused Result</span>
+      <span class="card-badge">voice + face</span>
+    </div>
+    <div class="combined-inner">
+      <div class="combined-emoji" id="combinedEmoji">😐</div>
+      <div class="combined-text">
+        <h2 id="combinedLabel">neutral</h2>
+        <p id="combinedSub">Fused from both modalities</p>
+        <div class="combined-chips" id="combinedChips"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          <span class="card-title">Face</span>
+          <span class="card-badge" id="faceBadge">inactive</span>
+        </div>
+        <div class="cam-wrap">
+          <video id="videoEl" autoplay muted playsinline></video>
+          <div id="camOverlay"><div class="cam-icon">📷</div><div>Camera not started</div></div>
+          <div id="faceBox"><div class="face-label" id="faceBoxLabel">face</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Face emotion</span></div>
+        <div class="emotion-display" id="faceEmotionDisplay">
+          <div class="placeholder-msg">Start camera to detect face emotion</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          <span class="card-title">Voice</span>
+          <span class="card-badge" id="voiceBadge">inactive</span>
+        </div>
+        <div class="audio-section">
+          <div class="visualizer-wrap"><canvas id="waveCanvas"></canvas></div>
+          <div class="controls">
+            <button class="btn" id="camBtn" onclick="toggleCamera()">📷 Start camera</button>
+            <button class="btn primary" id="recBtn" onclick="toggleRecording()">🎙 Record</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Voice emotion</span></div>
+        <div class="emotion-display" id="voiceEmotionDisplay">
+          <div class="placeholder-msg">Record audio to detect voice emotion</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Activity log</span>
+      <span class="card-badge" id="logCount">0 events</span>
+    </div>
+    <div class="log-body" id="logBody">
+      <div class="log-entry">— Waiting for input —</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND = window.location.origin;
+let stream=null, mediaRecorder=null, audioChunks=[], recording=false;
+let faceInterval=null, audioCtx=null, analyser=null, waveAnim=null, logCount=0;
+
+function log(msg){
+  logCount++;
+  document.getElementById('logCount').textContent=logCount+' events';
+  const el=document.createElement('div'); el.className='log-entry';
+  el.innerHTML=`<span>[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+  document.getElementById('logBody').prepend(el);
+}
+
+function setStatus(t,a){document.getElementById('statusText').textContent=t;document.getElementById('statusDot').classList.toggle('active',a);}
+
+function renderEmotion(containerId, data, badgeId){
+  const el=document.getElementById(containerId);
+  const badge=document.getElementById(badgeId);
+  const dominant=data.dominant||'unknown';
+  const emoji=data.emoji||'🤔';
+  const emotions=data.emotions||{};
+  const conf=data.confidence?data.confidence+'%':'';
+  if(badge){badge.textContent=dominant;}
+  const sorted=Object.entries(emotions).sort((a,b)=>b[1]-a[1]);
+  const bars=sorted.map(([lbl,val])=>`
+    <div class="bar-row">
+      <span class="bar-label">${lbl}</span>
+      <div class="bar-track"><div class="bar-fill f-${lbl}" style="width:${Math.min(val,100)}%"></div></div>
+      <span class="bar-val">${typeof val==='number'?val.toFixed(1):val}%</span>
+    </div>`).join('');
+  el.innerHTML=`
+    <div class="big-emotion">
+      <div class="big-emoji">${emoji}</div>
+      <div>
+        <div class="big-label c-${dominant}">${dominant}</div>
+        <div class="big-conf">${conf?'confidence: '+conf:'from model'}</div>
+      </div>
+    </div>
+    <div class="bars">${bars}</div>`;
+}
+
+function renderCombined(data){
+  const card=document.getElementById('combinedCard');
+  card.style.display='block';
+  document.getElementById('combinedEmoji').textContent=data.emoji||'🤔';
+  const lbl=document.getElementById('combinedLabel');
+  lbl.textContent=data.dominant||'';
+  lbl.className=`c-${data.dominant}`;
+  const top3=Object.entries(data.emotions||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  document.getElementById('combinedChips').innerHTML=top3.map(([l,v])=>`<span class="chip c-${l}">${l} ${v.toFixed(0)}%</span>`).join('');
+  document.getElementById('combinedSub').textContent=`Face: ${data.face?.dominant||'—'} · Voice: ${data.voice?.dominant||'—'}`;
+}
+
+async function toggleCamera(){
+  const btn=document.getElementById('camBtn');
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop()); stream=null;
+    clearInterval(faceInterval);
+    document.getElementById('camOverlay').style.display='flex';
+    btn.textContent='📷 Start camera'; setStatus('idle',false); log('Camera stopped'); return;
+  }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}});
+    const video=document.getElementById('videoEl');
+    video.srcObject=stream;
+    document.getElementById('camOverlay').style.display='none';
+    btn.textContent='🚫 Stop camera'; setStatus('camera active',true); log('Camera started');
+    // Wait for video to be ready
+    video.onloadedmetadata=()=>{ faceInterval=setInterval(captureAndAnalyzeFace,2000); };
+  }catch(e){ log('Camera error: '+e.message); alert('Camera error: '+e.message); }
+}
+
+async function captureAndAnalyzeFace(){
+  if(!stream) return;
+  const video=document.getElementById('videoEl');
+  if(!video.videoWidth) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(-1,1); ctx.drawImage(video,-canvas.width,0);
+  const b64=canvas.toDataURL('image/jpeg',0.8);
+  try{
+    const fd=new FormData(); fd.append('image',b64);
+    const res=await fetch(`${BACKEND}/analyze/face`,{method:'POST',body:fd});
+    const data=await res.json();
+    if(data.success){
+      renderEmotion('faceEmotionDisplay',data,'faceBadge');
+      drawFaceBox(data.face_box,canvas.width,canvas.height);
+      log(`Face: ${data.dominant} ${data.emoji}`);
+    } else {
+      document.getElementById('faceBadge').textContent='no face';
+      log('Face: '+( data.error||'no face detected'));
+    }
+  }catch(e){ log('Face error: '+e.message); }
+}
+
+function drawFaceBox(region,w,h){
+  if(!region) return;
+  const video=document.getElementById('videoEl');
+  const vw=video.offsetWidth, vh=video.offsetHeight;
+  const sx=vw/w, sy=vh/h;
+  const mx=w-region.x-region.w;
+  const box=document.getElementById('faceBox');
+  box.style.display='block';
+  box.style.left=(mx*sx)+'px'; box.style.top=(region.y*sy)+'px';
+  box.style.width=(region.w*sx)+'px'; box.style.height=(region.h*sy)+'px';
+  document.getElementById('faceBoxLabel').textContent=document.getElementById('faceBadge').textContent;
+}
+
+async function toggleRecording(){
+  const btn=document.getElementById('recBtn');
+  if(recording){
+    mediaRecorder.stop(); recording=false;
+    btn.textContent='🎙 Record'; btn.className='btn primary';
+    setStatus('processing…',true); return;
+  }
+  try{
+    const micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    setupVisualizer(micStream);
+    // Use audio/webm or fallback
+    const mimeType=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
+    mediaRecorder=new MediaRecorder(micStream,{mimeType});
+    audioChunks=[];
+    mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.onstop=async()=>{
+      const blob=new Blob(audioChunks,{type:mimeType});
+      micStream.getTracks().forEach(t=>t.stop());
+      cancelAnimationFrame(waveAnim);
+      await analyzeVoice(blob);
+      if(stream) await runCombined(blob);
+    };
+    mediaRecorder.start(100); // collect data every 100ms
+    recording=true;
+    btn.textContent='⏹ Stop'; btn.className='btn recording pulse';
+    document.getElementById('voiceBadge').textContent='recording…';
+    setStatus('recording…',true); log('Recording started');
+  }catch(e){ log('Mic error: '+e.message); alert('Microphone error: '+e.message); }
+}
+
+async function analyzeVoice(blob){
+  const fd=new FormData(); fd.append('audio',blob,'audio.webm');
+  try{
+    const res=await fetch(`${BACKEND}/analyze/voice`,{method:'POST',body:fd});
+    const data=await res.json();
+    if(data.success){
+      renderEmotion('voiceEmotionDisplay',data,'voiceBadge');
+      log(`Voice: ${data.dominant} ${data.emoji} (${data.confidence}%)`);
+    } else {
+      document.getElementById('voiceBadge').textContent='error';
+      log('Voice error: '+(data.error||'unknown'));
+    }
+  }catch(e){ log('Voice fetch error: '+e.message); }
+  setStatus('ready',true);
+}
+
+async function runCombined(audioBlob){
+  const video=document.getElementById('videoEl');
+  if(!video.videoWidth) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(-1,1); ctx.drawImage(video,-canvas.width,0);
+  const b64=canvas.toDataURL('image/jpeg',0.8);
+  const fd=new FormData(); fd.append('image',b64); fd.append('audio',audioBlob,'audio.webm');
+  try{
+    const res=await fetch(`${BACKEND}/analyze/combined`,{method:'POST',body:fd});
+    const data=await res.json();
+    if(data.success){ renderCombined(data); log(`Combined: ${data.dominant} ${data.emoji}`); }
+  }catch(e){ log('Combined error: '+e.message); }
+}
+
+function setupVisualizer(micStream){
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
+  audioCtx.createMediaStreamSource(micStream).connect(analyser);
+  drawWave();
+}
+
+function drawWave(){
+  const canvas=document.getElementById('waveCanvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth; canvas.height=canvas.offsetHeight;
+  const buf=new Uint8Array(analyser.frequencyBinCount);
+  function render(){
+    waveAnim=requestAnimationFrame(render);
+    analyser.getByteTimeDomainData(buf);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.lineWidth=2; ctx.strokeStyle='#7c6af7'; ctx.beginPath();
+    const sw=canvas.width/buf.length;
+    buf.forEach((v,i)=>{ const y=(v/128)*canvas.height/2; i===0?ctx.moveTo(0,y):ctx.lineTo(i*sw,y); });
+    ctx.stroke();
+  }
+  render();
+}
+</script>
+</body>
+</html>
